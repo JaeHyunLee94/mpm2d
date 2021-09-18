@@ -1,0 +1,9 @@
+/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=/Applications/Xcode.app/Contents/Developer/usr/bin/gcc -DCMAKE_CXX_COMPILER=/Applications/Xcode.app/Contents/Developer/usr/bin/g++ -G "CodeBlocks - Unix Makefiles" /Users/jhlee/Desktop/project/mpm2d
+processing GLFW...
+-- Using Cocoa for window creation
+processing GLEW...
+include glm..
+include Eigen...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /Users/jhlee/Desktop/project/mpm2d/cmake-build-debug
