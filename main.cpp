@@ -7,22 +7,16 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/gtx/transform.hpp>
 #include <Eigen/SVD>
 #include <vector>
 #include <fstream>
 #include <random>
 
 typedef glm::vec2 Vec2;
+typedef glm::vec3 Vec3;
 typedef glm::mat2 Mat2;
 typedef double Scalar;
-
-//openGL variable
-GLFWwindow* window;
-GLuint VAO;
-GLuint VBO;
-GLuint shader_program_id;
-
-
 struct Particle{
     Vec2 m_pos;
     Vec2 m_vel;
@@ -31,6 +25,20 @@ struct Particle{
     Scalar J;
 
 };
+//openGL variable
+GLFWwindow* window;
+GLuint VAO;
+GLuint VBO;
+GLuint VBO_line;
+GLuint shader_program_id;
+const float line[]{
+    0.0,0.0,
+    1.0,0.0,
+    1.0,1.0,
+    0.0,1.0,
+
+};
+
 
 //simulation parameter
 int grid_size;
@@ -38,11 +46,17 @@ Scalar dt;
 Scalar gravity;
 Scalar radius;
 Scalar particle_mass;
+Scalar dx;
+Scalar inv_dx;
 Vec2 center;
 unsigned int particle_num;
 std::vector<Particle> particles;
+std::vector<std::vector<Vec3>> grid;
 
 
+
+
+//debug function
 GLenum debug_glCheckError(int line)
 {
     GLenum errorCode;
@@ -64,7 +78,13 @@ GLenum debug_glCheckError(int line)
     return errorCode;
 }
 
+void logGrid(){
 
+};
+
+void logParticle(){
+
+};
 
 //opengl function
 int glWindowInit(){
@@ -106,11 +126,16 @@ void glObjectInit(){
     glBindVertexArray(VAO);
     glGenBuffers(1,&VBO);
     glBindBuffer(GL_ARRAY_BUFFER,VBO);
-    debug_glCheckError(107);
     glBufferData(GL_ARRAY_BUFFER,sizeof(Particle)*particles.size(),particles.data(),GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof (Particle),(void*)offsetof(Particle, m_pos));
-    debug_glCheckError(110);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,sizeof(Particle),(void*)offsetof(Particle, m_pos));
+
+    glGenBuffers(1,&VBO_line);
+    glBindBuffer(GL_ARRAY_BUFFER,VBO_line);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(float)*8,line,GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,(void*)0);
+
 };
 void shaderInit(){
     GLuint m_vertex_shader_id = glCreateShader(GL_VERTEX_SHADER);
@@ -214,28 +239,55 @@ void shaderInit(){
     std::cout << "Shader Program successfully made\n";
     glUseProgram(shader_program_id);
 
-};
+    glm::vec3 eye(0.5,0.5,1);
+    glm::vec3 lookat(0.5,0.5,0);
+    glm::vec3 up(0,1,0);
+    glm::mat4 m_view_matrix =glm::lookAt(eye,lookat,up);
+    glm::mat4 m_proj_matrix =glm::perspective(glm::radians(60.f),1.0f,0.01f,100.0f);
+    GLint loc_view= glGetUniformLocation(shader_program_id,"viewMat");
+    glUniformMatrix4fv(loc_view,1,GL_FALSE,&m_view_matrix[0][0]);
 
+    GLint loc_proj= glGetUniformLocation(shader_program_id,"projMat");
+    glUniformMatrix4fv(loc_proj,1,GL_FALSE,&m_proj_matrix[0][0]);
+
+};
 // simulation function
+void render(){
+
+    glBindBuffer(GL_ARRAY_BUFFER,VBO);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(Particle)*particles.size(),particles.data(),GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,sizeof(Particle),(void*)offsetof(Particle, m_pos));
+    glDrawArrays(GL_POINTS,0,particle_num);
+
+    glBindBuffer(GL_ARRAY_BUFFER,VBO_line);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,(void*)0);
+    glDrawArrays(GL_LINE_LOOP,0,4);
+
+
+};
 void simulationInit(){
 
     dt=1./60;
     grid_size=100;
     particle_num=8000;
-    radius=0.14;
+    radius=0.05;
     particles.resize(particle_num);
     particle_mass=1.0;
-
+    dx=1./grid_size;
+    inv_dx=1./dx;
+    center.x=0.5;
+    center.y=0.7;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> dis(0, 9999);
 
+    //particle init
     for(int i=0;i< particle_num;i++){
         int random_num=dis(gen);
         Scalar r = (radius/10000.0)*(Scalar)dis(gen);
         Scalar theta=(360.0/10000.0)*(Scalar)dis(gen);
-        particles[i].m_pos.x = r*cos(theta);
-        particles[i].m_pos.y = r*sin(theta);
+        particles[i].m_pos.x = center.x + r*cos(theta);
+        particles[i].m_pos.y = center.y + r*sin(theta);
         particles[i].m_vel.x=0;
         particles[i].m_vel.y=0;
         particles[i].m_F=Mat2(1.0);
@@ -245,48 +297,159 @@ void simulationInit(){
 
     }
 
+    //grid init
+    grid.resize(grid_size);
+    for(auto& g: grid){
+        g.resize(grid_size);
+        for(int i=0;i<grid_size;i++){
+            //vel + mass
+            g[i]=Vec3(0,0,particle_mass);
+        }
+    }
+
 
 };
 
 
+//cubic B-spline
+Scalar N(Scalar x){
+    x=abs(x);
+    if(x>=0 && x<1){
+        return 0.5* pow(x,3)- pow(x,2)+2./3;
+    }else if(x>=1 && x<2){
+        return -(1./6)* pow(x,3)+ pow(x,2) - 2*x+4./3;
+    }else{
+        return 0;
+    }
+}
 
-void step(Scalar dt){
+Scalar diff_N(Scalar x){
+
+
+    Scalar ret=0;
+    if(x>=0 && x<1){
+        ret= 1.5* pow(abs(x),2)- 2*pow(abs(x),2);
+    }else if(x>=1 && x<2){
+        ret -0.5* pow(abs(x),2)+ 2*pow(abs(x),2) -2;
+    }
+
+    return x>0 ? ret : -ret;
+
+
+}
+
+
+//weight
+Scalar W(Vec2 x_p,int grid_i,int grid_j){
+    Scalar fx= inv_dx*(x_p.x-grid_i*dx);
+    Scalar fy= inv_dx*(x_p.y-grid_j*dx);
+    return N(fx)*N(fy);
+
+}
+
+Vec2 grad_W(Vec2 x_p,int grid_i,int grid_j){
+
+    Scalar fx= inv_dx*(x_p.x-grid_i*dx);
+    Scalar fy= inv_dx*(x_p.y-grid_j*dx);
+
+    Vec2 ret(0);
+    ret.x=N(fx)*inv_dx* diff_N(fx);
+    ret.y=N(fy)*inv_dx* diff_N(fy);
+
+    return ret;
+
+}
+
+
+void initGrid(){
+    for(int i=0;i<grid_size;i++){
+        for(int j=0;j<grid_size;j++){
+            grid[i][j].x=0;
+            grid[i][j].y=0;
+            grid[i][j].z=0;
+        }
+    }
+
+};
+void p2g(){
+
+    for(auto& p : particles){
+
+
+
+
+
+
+    }
+
+};
+void updateGridVel(){
+
 
 
 };
-void render(){
-
-    glBufferData(GL_ARRAY_BUFFER,sizeof(Particle)*particles.size(),particles.data(),GL_DYNAMIC_DRAW);
-    glDrawArrays(GL_POINTS,0,particle_num);
+void gridCollision(){
 
 };
+void g2p(){
+
+    for(int i=0;i<grid_size;i++){
+
+        for(int j=0;j<grid_size;j++){
+
+
+
+        }
+    }
+
+};
+void updateParticle(){
+
+
+};
+
+void particleCollision(){
+
+};
+
+void step(){
+
+    initGrid();
+    p2g();
+    updateGridVel();
+    gridCollision();
+    g2p();
+    updateParticle();
+    particleCollision();
+
+}
+
+
+
 
 int main(){
 
 
     glWindowInit();
     shaderInit();
-
     simulationInit();
     glObjectInit();
-    debug_glCheckError(274);
-
 
     do{
 
         glClear( GL_COLOR_BUFFER_BIT );
-        step(dt);
-        render();
-        debug_glCheckError(277);
-        glfwSwapBuffers(window);
         glfwPollEvents();
+
+        step();
+        render();
+
+        glfwSwapBuffers(window);
+
+
 
     } // Check if the ESC key was pressed or the window was closed
     while( glfwGetKey(window, GLFW_KEY_ESCAPE ) != GLFW_PRESS &&
            glfwWindowShouldClose(window) == 0 );
-
-
-
 
 
     return 0;
