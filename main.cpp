@@ -366,6 +366,7 @@ void initGrid(){
         for(int j=0;j<grid_size;j++){
             grid[i][j].x=0;
             grid[i][j].y=0;
+            //mass
             grid[i][j].z=0;
         }
     }
