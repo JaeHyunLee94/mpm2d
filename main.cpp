@@ -61,6 +61,7 @@ Vec2 center;
 unsigned int particle_num;
 std::vector<Particle> particles;
 std::vector<std::vector<GridNode>> grid;
+std::vector<std::vector<GridNode>> grid2;
 
 
 //debug function
@@ -296,7 +297,7 @@ void render() {
 
 void simulationInit() {
 
-    dt = 0.00001;
+    dt = 0.01;
     grid_size = 128;
     particle_num = 8192;
     radius = 0.05;
@@ -444,6 +445,7 @@ void p2g() {
 
 
     }
+    grid2 = grid;
 
 };
 
@@ -487,7 +489,7 @@ void g2p() {
                 Scalar Weight = W(dist);
 
 
-                p.m_vel_p += grid[coord_x][coord_y].m_vel_i * (float) Weight;
+                p.m_vel_p += (grid[coord_x][coord_y].m_vel_i - grid2[coord_x][coord_y].m_vel_i) * (float) Weight;
 
 
             }
