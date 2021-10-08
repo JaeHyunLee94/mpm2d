@@ -18,7 +18,7 @@ typedef glm::vec3 Vec3;
 typedef glm::mat2 Mat2;
 typedef double Scalar;
 
-struct GridNode{
+struct GridNode {
     Vec2 m_vel_i;
     Vec2 m_force_i;
     Scalar m_mass_i;
@@ -102,11 +102,11 @@ void logGrid() {
 
 void logParticle() {
 
-    int i=0;
-    for(auto& p : particles){
+    int i = 0;
+    for (auto &p : particles) {
 
-        printf("%d th particle m_pos: (%f,%f), m_vel (%f,%f)\n",i,p.m_pos_p.x,p.m_pos_p.y,
-               p.m_vel_p.x,p.m_vel_p.y);
+        printf("%d th particle m_pos: (%f,%f), m_vel (%f,%f)\n", i, p.m_pos_p.x, p.m_pos_p.y,
+               p.m_vel_p.x, p.m_vel_p.y);
         i++;
     }
 };
@@ -296,12 +296,12 @@ void render() {
 
 void simulationInit() {
 
-    dt = 1. / 24000;
-    grid_size = 2000;
-    particle_num = 4000;
+    dt = 0.00001;
+    grid_size = 128;
+    particle_num = 8192;
     radius = 0.05;
-    gravity=Vec2{0,-9.8};
-    initVolume=0.2f; //TODO
+    gravity = Vec2{0, -9.8};
+    initVolume = 0.2f; //TODO
     particles.resize(particle_num);
     particle_mass = 1.0;
     dx = 1. / grid_size;
@@ -334,9 +334,9 @@ void simulationInit() {
         g.resize(grid_size);
         for (int i = 0; i < grid_size; i++) {
             //vel + mass
-            g[i].m_vel_i = Vec2 (0);
-            g[i].m_force_i=Vec2(0);
-            g[i].m_mass_i=0;
+            g[i].m_vel_i = Vec2(0);
+            g[i].m_force_i = Vec2(0);
+            g[i].m_mass_i = 0;
         }
     }
 
@@ -346,49 +346,54 @@ void simulationInit() {
 
 //cubic B-spline
 Scalar N(Scalar x) {
-    x = abs(x);
-    if (x >= 0 && x < 1) {
-        return 0.5 * pow(x, 3) - pow(x, 2) + 2. / 3;
-    } else if (x >= 1 && x < 2) {
-        return -(1. / 6) * pow(x, 3) + pow(x, 2) - 2 * x + 4. / 3;
-    } else {
-        return 0;
-    }
+    Scalar W;
+    x = fabs(x);
+
+    if (x < 1)
+        W = (x * x * x / 2.0 - x * x + 2 / 3.0);
+
+    else if (x < 2)
+        W = (2 - x) * (2 - x) * (2 - x) / 6.0;
+
+    else
+        W = 0;
+
+    return W;
 }
 
 Scalar diff_N(Scalar x) {
 
 
-    Scalar ret = 0;
-    if (x >= 0 && x < 1) {
-        ret = 1.5 * pow(abs(x), 2) - 2 * pow(abs(x), 2);
-    } else if (x >= 1 && x < 2) {
-        ret - 0.5 * pow(abs(x), 2) + 2 * pow(abs(x), 2) - 2;
-    }
+    Scalar dW;
+    Scalar x_abs;
+    x_abs = fabs(x);
 
-    return x > 0 ? ret : -ret;
+    if (x_abs < 1)
+        dW = 1.5 * x * x_abs - 2.0 * x;
+
+    else if (x_abs < 2)
+        dW = -x * x_abs / 2.0 + 2 * x - 2 * x / x_abs;
+
+    else
+        dW = 0;
+
+    return dW;
 
 
 }
 
 //weight
-Scalar W(Vec2 x_p, int grid_i, int grid_j) {
-    Scalar fx = inv_dx * (x_p.x - grid_i * dx);
-    Scalar fy = inv_dx * (x_p.y - grid_j * dx);
-    return N(fx) * N(fy);
+Scalar W(Vec2 dist) {
+
+    return N(dist.x) * N(dist.y);
 
 }
 
-Vec2 grad_W(Vec2 x_p, int grid_i, int grid_j) {
+Vec2 grad_W(Vec2 dist) {
 
-    Scalar fx = inv_dx * (x_p.x - grid_i * dx);
-    Scalar fy = inv_dx * (x_p.y - grid_j * dx);
-
-    Vec2 ret(0);
-    ret.x = N(fx) * inv_dx * diff_N(fx);
-    ret.y = N(fy) * inv_dx * diff_N(fy);
-
-    return ret;
+    return Vec2(
+            diff_N(dist[0]) * N(dist[1]),
+            N(dist[0]) * diff_N(dist[1]));
 
 }
 
@@ -396,9 +401,9 @@ Vec2 grad_W(Vec2 x_p, int grid_i, int grid_j) {
 void initGrid() {
     for (int i = 0; i < grid_size; i++) {
         for (int j = 0; j < grid_size; j++) {
-            grid[i][j].m_vel_i=Vec2(0);
-            grid[i][j].m_mass_i=0;
-            grid[i][j].m_force_i=Vec2(0);
+            grid[i][j].m_vel_i = Vec2(0);
+            grid[i][j].m_mass_i = 0;
+            grid[i][j].m_force_i = Vec2(0);
 
         }
     }
@@ -409,24 +414,29 @@ void p2g() {
 
     for (auto &p : particles) {
 
-        int base_x = static_cast<int> (std::floor(p.m_pos_p.x *inv_dx));
-        int base_y = static_cast<int> (std::floor(p.m_pos_p.y*inv_dx));
+        int base_x = static_cast<int> (std::floor(p.m_pos_p.x * inv_dx));
+        int base_y = static_cast<int> (std::floor(p.m_pos_p.y * inv_dx));
 
 
-        for (int i = -1; i < 2; i++) {
-            for (int j = -1; j < 2; j++) {
+        for (int i = -1; i < 3; i++) {
+            for (int j = -1; j < 3; j++) {
 
                 int coord_x = base_x + i;
                 int coord_y = base_y + j;
+
+                //printf("pos : %f,%f coord: %d,%d\n",p.m_pos_p.x,p.m_pos_p.y,coord_x,coord_y);
+
                 //check boundary
                 if (coord_x < 0 || coord_y < 0 || coord_x >= grid_size || coord_y >= grid_size) continue;
-                Scalar Weight =  W(p.m_pos_p, coord_x, coord_y);
+                Vec2 coord(coord_x, coord_y);
+                Vec2 dist = (p.m_pos_p - coord * (float) dx) * (float) inv_dx;
+                Scalar Weight = W(dist);
 
+//                std::cout << Weight << "\n";
+                grid[coord_x][coord_y].m_vel_i = p.m_vel_p * (float) (p.m_mass_p * Weight);
+                grid[coord_x][coord_y].m_mass_i = p.m_mass_p * Weight;
 
-                grid[coord_x][coord_y].m_vel_i = p.m_vel_p * (float)(p.m_mass_p* Weight);
-                grid[coord_x][coord_y].m_mass_i = p.m_mass_p *Weight;
-
-                grid[coord_x][coord_y].m_vel_i/= grid[coord_x][coord_y].m_mass_i;
+                grid[coord_x][coord_y].m_vel_i /= grid[coord_x][coord_y].m_mass_i;
 
 
             }
@@ -440,16 +450,15 @@ void p2g() {
 void updateGridVel() {
 
 
-    for(int i=0;i<grid_size;i++){
-        for(int j=0;j<grid_size;j++){
+    for (int i = 0; i < grid_size; i++) {
+        for (int j = 0; j < grid_size; j++) {
 
 
-            grid[i][j].m_vel_i += (gravity) *(float)dt;
+            grid[i][j].m_vel_i += (gravity) * (float) dt;
 
         }
 
     }
-
 
 
 };
@@ -462,22 +471,23 @@ void g2p() {
 
     for (auto &p : particles) {
 
-        int base_x = static_cast<int> (std::floor(p.m_pos_p.x *inv_dx));
-        int base_y = static_cast<int> (std::floor(p.m_pos_p.y*inv_dx));
+        int base_x = static_cast<int> (std::floor(p.m_pos_p.x * inv_dx));
+        int base_y = static_cast<int> (std::floor(p.m_pos_p.y * inv_dx));
 
 
-        for (int i = -1; i < 2; i++) {
-            for (int j = -1; j < 2; j++) {
+        for (int i = -1; i < 3; i++) {
+            for (int j = -1; j < 3; j++) {
 
                 int coord_x = base_x + i;
                 int coord_y = base_y + j;
                 //check boundary
                 if (coord_x < 0 || coord_y < 0 || coord_x >= grid_size || coord_y >= grid_size) continue;
-                Scalar Weight =  W(p.m_pos_p, coord_x, coord_y);
+                Vec2 coord(coord_x, coord_y);
+                Vec2 dist = (p.m_pos_p - coord * (float) dx) * (float) inv_dx;
+                Scalar Weight = W(dist);
 
 
-                p.m_vel_p += grid[coord_x][coord_y].m_vel_i*(float)Weight;
-
+                p.m_vel_p += grid[coord_x][coord_y].m_vel_i * (float) Weight;
 
 
             }
@@ -492,7 +502,7 @@ void updateParticle() {
     for (auto &p : particles) {
 
         //explicit
-        p.m_pos_p+=p.m_vel_p*(float)dt;
+        p.m_pos_p += p.m_vel_p * (float) dt;
 
     }
 
@@ -512,7 +522,12 @@ void step() {
     g2p();
     updateParticle();
     particleCollision();
-
+//
+//    for (auto &p: particles) {
+//        p.m_vel_p+=gravity*(float )dt;
+//        p.m_pos_p+=p.m_vel_p*(float)dt;
+//
+//    }
 }
 
 
@@ -525,7 +540,7 @@ int main() {
     simulationInit();
     glObjectInit();
 
-    int frame=0;
+    int frame = 0;
     do {
 
         glClear(GL_COLOR_BUFFER_BIT);
@@ -534,7 +549,7 @@ int main() {
         step();
         //logParticle();
         render();
-        std::cout << "frame: "<< frame<< "\n";
+        std::cout << "frame: " << frame << "\n";
         frame++;
         glfwSwapBuffers(window);
 
