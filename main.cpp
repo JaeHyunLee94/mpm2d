@@ -296,10 +296,10 @@ void render() {
 
 void simulationInit() {
 
-    dt = 0.00001;
-    grid_size = 128;
-    particle_num = 8192;
-    radius = 0.05;
+    dt = 0.0001;
+    grid_size = 512;
+    particle_num = 2096;
+    radius = 0.08;
     gravity = Vec2{0, -9.8};
     initVolume = 0.2f; //TODO
     particles.resize(particle_num);
@@ -417,9 +417,10 @@ void p2g() {
         int base_x = static_cast<int> (std::floor(p.m_pos_p.x * inv_dx));
         int base_y = static_cast<int> (std::floor(p.m_pos_p.y * inv_dx));
 
-
+        //std::vector<Scalar> dbg;
         for (int i = -1; i < 3; i++) {
             for (int j = -1; j < 3; j++) {
+
 
                 int coord_x = base_x + i;
                 int coord_y = base_y + j;
@@ -431,16 +432,23 @@ void p2g() {
                 Vec2 coord(coord_x, coord_y);
                 Vec2 dist = (p.m_pos_p - coord * (float) dx) * (float) inv_dx;
                 Scalar Weight = W(dist);
+                //dbg.push_back(Weight);
 
 //                std::cout << Weight << "\n";
-                grid[coord_x][coord_y].m_vel_i = p.m_vel_p * (float) (p.m_mass_p * Weight);
-                grid[coord_x][coord_y].m_mass_i = p.m_mass_p * Weight;
+                grid[coord_x][coord_y].m_vel_i += p.m_vel_p * (float) (p.m_mass_p * Weight);
+                grid[coord_x][coord_y].m_mass_i += p.m_mass_p * Weight;
 
-                grid[coord_x][coord_y].m_vel_i /= grid[coord_x][coord_y].m_mass_i;
+
 
 
             }
         }
+//        Scalar sum=0;
+//        for(auto& d : dbg){
+//            sum+=d;
+//            std::cout << d << " ";
+//        }
+//        std::cout << "\nsum: " << sum << "\n";
 
 
     }
@@ -453,7 +461,11 @@ void updateGridVel() {
     for (int i = 0; i < grid_size; i++) {
         for (int j = 0; j < grid_size; j++) {
 
+            //normalize
+            if(grid[i][j].m_mass_i >0 ){
+                grid[i][j].m_vel_i /= grid[i][j].m_mass_i;
 
+            }
             grid[i][j].m_vel_i += (gravity) * (float) dt;
 
         }
@@ -469,12 +481,14 @@ void gridCollision() {
 
 void g2p() {
 
+    //gathering from grid
+
     for (auto &p : particles) {
 
         int base_x = static_cast<int> (std::floor(p.m_pos_p.x * inv_dx));
         int base_y = static_cast<int> (std::floor(p.m_pos_p.y * inv_dx));
 
-
+//        std::vector<Scalar> dbg;
         for (int i = -1; i < 3; i++) {
             for (int j = -1; j < 3; j++) {
 
@@ -485,13 +499,21 @@ void g2p() {
                 Vec2 coord(coord_x, coord_y);
                 Vec2 dist = (p.m_pos_p - coord * (float) dx) * (float) inv_dx;
                 Scalar Weight = W(dist);
+//                dbg.push_back(Weight);
 
+                Vec2 vel_PIC = grid[coord_x][coord_y].m_vel_i * (float) Weight;
 
-                p.m_vel_p += grid[coord_x][coord_y].m_vel_i * (float) Weight;
+                p.m_vel_p += vel_PIC;
 
 
             }
         }
+//        Scalar sum=0;
+//        for(auto& d : dbg){
+//            sum+=d;
+//            std::cout << d << " ";
+//        }
+//        std::cout << "\nsum: " << sum << "\n";
 
 
     }
@@ -501,7 +523,7 @@ void g2p() {
 void updateParticle() {
     for (auto &p : particles) {
 
-        //explicit
+        //explicit advection
         p.m_pos_p += p.m_vel_p * (float) dt;
 
     }
@@ -522,9 +544,9 @@ void step() {
     g2p();
     updateParticle();
     particleCollision();
-//
+
 //    for (auto &p: particles) {
-//        p.m_vel_p+=gravity*(float )dt;
+//        p.m_vel_p+=gravity*(float)dt;
 //        p.m_pos_p+=p.m_vel_p*(float)dt;
 //
 //    }
@@ -533,8 +555,7 @@ void step() {
 
 int main() {
 
-//TODO: cubic b spline 다른걸로
-//TODO: p2g 말고 그냥 gravity update
+
     glWindowInit();
     shaderInit();
     simulationInit();
