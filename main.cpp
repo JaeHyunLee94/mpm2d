@@ -44,7 +44,6 @@ const float line[]{
         1.0, 0.0,
         1.0, 1.0,
         0.0, 1.0,
-
 };
 
 
@@ -296,7 +295,7 @@ void render() {
 
 void simulationInit() {
 
-    dt = 0.0001;
+    dt = 0.01;
     grid_size = 512;
     particle_num = 2096;
     radius = 0.08;
@@ -425,16 +424,13 @@ void p2g() {
                 int coord_x = base_x + i;
                 int coord_y = base_y + j;
 
-                //printf("pos : %f,%f coord: %d,%d\n",p.m_pos_p.x,p.m_pos_p.y,coord_x,coord_y);
 
                 //check boundary
                 if (coord_x < 0 || coord_y < 0 || coord_x >= grid_size || coord_y >= grid_size) continue;
                 Vec2 coord(coord_x, coord_y);
                 Vec2 dist = (p.m_pos_p - coord * (float) dx) * (float) inv_dx;
                 Scalar Weight = W(dist);
-                //dbg.push_back(Weight);
 
-//                std::cout << Weight << "\n";
                 grid[coord_x][coord_y].m_vel_i += p.m_vel_p * (float) (p.m_mass_p * Weight);
                 grid[coord_x][coord_y].m_mass_i += p.m_mass_p * Weight;
 
@@ -443,13 +439,6 @@ void p2g() {
 
             }
         }
-//        Scalar sum=0;
-//        for(auto& d : dbg){
-//            sum+=d;
-//            std::cout << d << " ";
-//        }
-//        std::cout << "\nsum: " << sum << "\n";
-
 
     }
 
@@ -464,9 +453,9 @@ void updateGridVel() {
             //normalize
             if(grid[i][j].m_mass_i >0 ){
                 grid[i][j].m_vel_i /= grid[i][j].m_mass_i;
-
+                grid[i][j].m_vel_i += (gravity) * (float) dt;
             }
-            grid[i][j].m_vel_i += (gravity) * (float) dt;
+
 
         }
 
@@ -485,21 +474,22 @@ void g2p() {
 
     for (auto &p : particles) {
 
+        p.m_vel_p=Vec2(0);
         int base_x = static_cast<int> (std::floor(p.m_pos_p.x * inv_dx));
         int base_y = static_cast<int> (std::floor(p.m_pos_p.y * inv_dx));
 
-//        std::vector<Scalar> dbg;
+
         for (int i = -1; i < 3; i++) {
             for (int j = -1; j < 3; j++) {
 
                 int coord_x = base_x + i;
                 int coord_y = base_y + j;
-                //check boundary
+
                 if (coord_x < 0 || coord_y < 0 || coord_x >= grid_size || coord_y >= grid_size) continue;
                 Vec2 coord(coord_x, coord_y);
                 Vec2 dist = (p.m_pos_p - coord * (float) dx) * (float) inv_dx;
                 Scalar Weight = W(dist);
-//                dbg.push_back(Weight);
+
 
                 Vec2 vel_PIC = grid[coord_x][coord_y].m_vel_i * (float) Weight;
 
@@ -508,12 +498,6 @@ void g2p() {
 
             }
         }
-//        Scalar sum=0;
-//        for(auto& d : dbg){
-//            sum+=d;
-//            std::cout << d << " ";
-//        }
-//        std::cout << "\nsum: " << sum << "\n";
 
 
     }
@@ -545,11 +529,7 @@ void step() {
     updateParticle();
     particleCollision();
 
-//    for (auto &p: particles) {
-//        p.m_vel_p+=gravity*(float)dt;
-//        p.m_pos_p+=p.m_vel_p*(float)dt;
-//
-//    }
+
 }
 
 
