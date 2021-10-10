@@ -51,12 +51,15 @@ const float line[]{
 int grid_size;
 Scalar dt;
 Vec2 gravity;
-Scalar initVolume;
+Scalar V0;
 Scalar radius;
 Scalar particle_mass;
 Scalar dx;
 Scalar inv_dx;
+Scalar boundary;
 Vec2 center;
+Scalar E_0,nu_0, hardening,critical_comp,critical_stretch ,rho_0;
+
 unsigned int particle_num;
 std::vector<Particle> particles;
 std::vector<std::vector<GridNode>> grid;
@@ -94,21 +97,6 @@ GLenum debug_glCheckError(int line) {
     }
     return errorCode;
 }
-
-void logGrid() {
-
-};
-
-void logParticle() {
-
-    int i = 0;
-    for (auto &p : particles) {
-
-        printf("%d th particle m_pos: (%f,%f), m_vel (%f,%f)\n", i, p.m_pos_p.x, p.m_pos_p.y,
-               p.m_vel_p.x, p.m_vel_p.y);
-        i++;
-    }
-};
 
 //opengl function
 int glWindowInit() {
@@ -295,18 +283,19 @@ void render() {
 
 void simulationInit() {
 
-    dt = 0.01;
+    dt = 0.001;
     grid_size = 512;
     particle_num = 2096;
     radius = 0.08;
     gravity = Vec2{0, -9.8};
-    initVolume = 0.2f; //TODO
+    V0 = 0.2f; //TODO
     particles.resize(particle_num);
     particle_mass = 1.0;
     dx = 1. / grid_size;
     inv_dx = 1. / dx;
     center.x = 0.5;
     center.y = 0.7;
+    boundary=0.03;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> dis(0, 9999);
@@ -466,6 +455,22 @@ void updateGridVel() {
 
 void gridCollision() {
 
+
+    for(int i=0;i<grid_size;i++){
+        for(int j=0;j<grid_size;j++){
+            Scalar x= i*dx;
+            Scalar y= j*dx;
+            if(x<boundary || x>1-boundary) {
+                grid[i][j].m_vel_i.x=0;
+            }
+            if(y<boundary || y>1-boundary){
+                grid[i][j].m_vel_i.y=0;
+            }
+
+
+        }
+
+    }
 };
 
 void g2p() {
@@ -516,6 +521,27 @@ void updateParticle() {
 };
 
 void particleCollision() {
+    for (auto &p : particles) {
+
+        //explicit advection
+        if(p.m_pos_p.x<boundary){
+            p.m_pos_p.x=boundary;
+            p.m_vel_p.x=0;
+        }
+        if(p.m_pos_p.x>1-boundary){
+            p.m_pos_p.x=1-boundary;
+            p.m_vel_p.x=0;
+        }
+        if(p.m_pos_p.y<boundary){
+            p.m_pos_p.y=boundary;
+            p.m_vel_p.y=0;
+        }
+        if(p.m_pos_p.y>1-boundary){
+            p.m_pos_p.y=1-boundary;
+            p.m_vel_p.y=0;
+        }
+
+    }
 
 };
 
