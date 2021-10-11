@@ -3,19 +3,20 @@
 //
 
 #include <iostream>
-
+#include <algorithm>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 #include <Eigen/SVD>
+#include <Eigen/Dense>
 #include <vector>
 #include <fstream>
 #include <random>
 
-typedef glm::vec2 Vec2;
-typedef glm::vec3 Vec3;
-typedef glm::mat2 Mat2;
+typedef glm::dvec2 Vec2;
+typedef glm::dvec3 Vec3;
+typedef Eigen::Matrix2d Mat2;
 typedef double Scalar;
 
 struct GridNode {
@@ -26,11 +27,13 @@ struct GridNode {
 struct Particle {
     Vec2 m_pos_p;
     Vec2 m_vel_p;
+    Mat2 m_vel_grad;
     Vec3 m_force_P;
     Scalar m_mass_p;
-    Mat2 m_F_p;
+    Mat2 m_F_e, m_F_p, m_F_e_tmp, m_F_p_tmp; //tmp for computation
+    Mat2 m_Ap;//for computation Vpop;
+    Scalar m_J_e, m_J_p;
 
-    Scalar m_J_p;
 
 };
 //openGL variable
@@ -39,7 +42,7 @@ GLuint VAO;
 GLuint VBO;
 GLuint VBO_line;
 GLuint shader_program_id;
-const float line[]{
+const double line[]{
         0.0, 0.0,
         1.0, 0.0,
         1.0, 1.0,
@@ -58,7 +61,7 @@ Scalar dx;
 Scalar inv_dx;
 Scalar boundary;
 Vec2 center;
-Scalar E_0,nu_0, hardening,critical_comp,critical_stretch ,rho_0;
+Scalar E,nu,mu0, lambda0, hardening, critical_comp, critical_stretch, rho_0;
 
 unsigned int particle_num;
 std::vector<Particle> particles;
@@ -141,13 +144,13 @@ void glObjectInit() {
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(Particle) * particles.size(), particles.data(), GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Particle), (void *) offsetof(Particle, m_pos_p));
+    glVertexAttribPointer(0, 2, GL_DOUBLE, GL_FALSE, sizeof(Particle), (void *) offsetof(Particle, m_pos_p));
 
     glGenBuffers(1, &VBO_line);
     glBindBuffer(GL_ARRAY_BUFFER, VBO_line);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, line, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Scalar) * 8, line, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *) 0);
+    glVertexAttribPointer(0, 2, GL_DOUBLE, GL_FALSE, 0, (void *) 0);
 
 };
 
@@ -271,11 +274,11 @@ void render() {
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(Particle) * particles.size(), particles.data(), GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Particle), (void *) offsetof(Particle, m_pos_p));
+    glVertexAttribPointer(0, 2, GL_DOUBLE, GL_FALSE, sizeof(Particle), (void *) offsetof(Particle, m_pos_p));
     glDrawArrays(GL_POINTS, 0, particle_num);
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO_line);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *) 0);
+    glVertexAttribPointer(0, 2, GL_DOUBLE, GL_FALSE, 0, (void *) 0);
     glDrawArrays(GL_LINE_LOOP, 0, 4);
 
 
@@ -283,23 +286,32 @@ void render() {
 
 void simulationInit() {
 
-    dt = 0.001;
-    grid_size = 512;
-    particle_num = 2096;
+    dt = 0.01;
+    grid_size = 80;
+    particle_num = 1000;
     radius = 0.08;
     gravity = Vec2{0, -9.8};
-    V0 = 0.2f; //TODO
+    V0 = 1.0; //TODO
     particles.resize(particle_num);
     particle_mass = 1.0;
     dx = 1. / grid_size;
     inv_dx = 1. / dx;
     center.x = 0.5;
     center.y = 0.7;
-    boundary=0.03;
+    boundary = 0.03;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> dis(0, 9999);
 
+    hardening=10;
+    E=1.4e5;
+    nu=0.2;
+    mu0= E / (2 * (1 + nu));
+    lambda0 = E * nu / ((1+nu) * (1 - 2 * nu));
+    printf("mu0: %f, lamda0: %f",mu0,lambda0);
+
+    critical_comp= 2.5e-2;
+    critical_stretch= 7.5e-3;
     //particle init
     for (int i = 0; i < particle_num; i++) {
         int random_num = dis(gen);
@@ -309,10 +321,15 @@ void simulationInit() {
         particles[i].m_pos_p.y = center.y + r * sin(theta);
         particles[i].m_vel_p.x = 0;
         particles[i].m_vel_p.y = 0;
-        particles[i].m_F_p = Mat2(1.0);
+        particles[i].m_vel_grad.setIdentity();
+        particles[i].m_F_p.setIdentity();
+        particles[i].m_F_e.setIdentity();
+        particles[i].m_F_p_tmp.setIdentity();
+        particles[i].m_F_e_tmp.setIdentity();
         particles[i].m_J_p = 1;
+        particles[i].m_J_e = 1;
         particles[i].m_mass_p = particle_mass;
-
+        particles[i].m_Ap.setIdentity();
 
     }
 
@@ -398,6 +415,17 @@ void initGrid() {
 
 };
 
+void computeAp(Particle &p) {
+
+    Scalar mu=mu0*std::exp(hardening*(1-p.m_J_p));
+    Scalar lambda=lambda0*std::exp(hardening*(1-p.m_J_p));
+    Mat2 I;
+    I.setIdentity();
+    Eigen::JacobiSVD<Mat2> svd(p.m_F_e,Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Mat2 Re = svd.matrixU()*svd.matrixV().transpose();
+    p.m_Ap = V0*(2*mu*(p.m_F_e-Re)*p.m_F_e.transpose() + I*lambda*(p.m_J_e-1)*p.m_J_e);
+}
+
 void p2g() {
 
     for (auto &p : particles) {
@@ -405,7 +433,8 @@ void p2g() {
         int base_x = static_cast<int> (std::floor(p.m_pos_p.x * inv_dx));
         int base_y = static_cast<int> (std::floor(p.m_pos_p.y * inv_dx));
 
-        //std::vector<Scalar> dbg;
+        computeAp(p);
+
         for (int i = -1; i < 3; i++) {
             for (int j = -1; j < 3; j++) {
 
@@ -417,13 +446,19 @@ void p2g() {
                 //check boundary
                 if (coord_x < 0 || coord_y < 0 || coord_x >= grid_size || coord_y >= grid_size) continue;
                 Vec2 coord(coord_x, coord_y);
-                Vec2 dist = (p.m_pos_p - coord * (float) dx) * (float) inv_dx;
+                Vec2 dist = (p.m_pos_p - coord * dx) * inv_dx;
                 Scalar Weight = W(dist);
-
-                grid[coord_x][coord_y].m_vel_i += p.m_vel_p * (float) (p.m_mass_p * Weight);
+                Vec2 dWeight = grad_W(dist);
+                grid[coord_x][coord_y].m_vel_i += p.m_vel_p * (p.m_mass_p * Weight);
                 grid[coord_x][coord_y].m_mass_i += p.m_mass_p * Weight;
 
 
+                glm::mat2 Ap ;
+                Ap[0][0]=p.m_Ap(0,0);
+                Ap[0][1]=p.m_Ap(0,1);
+                Ap[1][0]=p.m_Ap(1,0);
+                Ap[1][1]=p.m_Ap(1,1);
+                grid[coord_x][coord_y].m_force_i-= Ap*dWeight;
 
 
             }
@@ -440,9 +475,9 @@ void updateGridVel() {
         for (int j = 0; j < grid_size; j++) {
 
             //normalize
-            if(grid[i][j].m_mass_i >0 ){
+            if (grid[i][j].m_mass_i > 0) {
                 grid[i][j].m_vel_i /= grid[i][j].m_mass_i;
-                grid[i][j].m_vel_i += (gravity) * (float) dt;
+                grid[i][j].m_vel_i += ( grid[i][j].m_force_i/grid[i][j].m_mass_i+ gravity) * dt;
             }
 
 
@@ -456,15 +491,15 @@ void updateGridVel() {
 void gridCollision() {
 
 
-    for(int i=0;i<grid_size;i++){
-        for(int j=0;j<grid_size;j++){
-            Scalar x= i*dx;
-            Scalar y= j*dx;
-            if(x<boundary || x>1-boundary) {
-                grid[i][j].m_vel_i.x=0;
+    for (int i = 0; i < grid_size; i++) {
+        for (int j = 0; j < grid_size; j++) {
+            Scalar x = i * dx;
+            Scalar y = j * dx;
+            if (x < boundary || x > 1 - boundary) {
+                grid[i][j].m_vel_i.x = 0;
             }
-            if(y<boundary || y>1-boundary){
-                grid[i][j].m_vel_i.y=0;
+            if (y < boundary || y > 1 - boundary) {
+                grid[i][j].m_vel_i.y = 0;
             }
 
 
@@ -479,7 +514,7 @@ void g2p() {
 
     for (auto &p : particles) {
 
-        p.m_vel_p=Vec2(0);
+        p.m_vel_p = Vec2(0);
         int base_x = static_cast<int> (std::floor(p.m_pos_p.x * inv_dx));
         int base_y = static_cast<int> (std::floor(p.m_pos_p.y * inv_dx));
 
@@ -492,14 +527,22 @@ void g2p() {
 
                 if (coord_x < 0 || coord_y < 0 || coord_x >= grid_size || coord_y >= grid_size) continue;
                 Vec2 coord(coord_x, coord_y);
-                Vec2 dist = (p.m_pos_p - coord * (float) dx) * (float) inv_dx;
+                Vec2 dist = (p.m_pos_p - coord * dx) * inv_dx;
                 Scalar Weight = W(dist);
+                Vec2 dWeight = grad_W(dist);
 
+                Vec2 vel_PIC = grid[coord_x][coord_y].m_vel_i * Weight;
 
-                Vec2 vel_PIC = grid[coord_x][coord_y].m_vel_i * (float) Weight;
+                Mat2 vel_grad;
+                vel_grad.setZero();
+
+                glm::mat2 vel_grad_glm = glm::outerProduct(grid[coord_x][coord_y].m_vel_i, dWeight);
+                vel_grad << vel_grad_glm[0][0], vel_grad_glm[0][1],
+                        vel_grad_glm[1][0], vel_grad_glm[1][1];
+
 
                 p.m_vel_p += vel_PIC;
-
+                p.m_vel_grad+=vel_grad;
 
             }
         }
@@ -509,11 +552,40 @@ void g2p() {
 
 };
 
+Eigen::Vector2d clamp(Eigen::Vector2d & vec, Scalar minimum, Scalar maximum) {
+
+    Eigen::Vector2d ret;
+    ret << std::clamp(vec(0),minimum,maximum),std::clamp(vec(1),minimum,maximum);
+    return ret;
+}
+
+void updateDeformationGradient(Particle &p) {
+
+    p.m_F_e_tmp= p.m_F_e+p.m_F_e*p.m_vel_grad*dt;
+    p.m_F_p_tmp=p.m_F_p;
+
+
+    Eigen::JacobiSVD<Mat2> svd(p.m_F_e_tmp,Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Mat2 U = svd.matrixU();
+    Mat2 V = svd.matrixV();
+    Eigen::Vector2d sigma = svd.singularValues();
+
+    Eigen::Vector2d clamped_sigma=clamp(sigma,1-critical_comp,1+critical_stretch);
+
+
+    p.m_F_e=U*clamped_sigma.asDiagonal()*V.transpose();
+    p.m_F_p=V* clamped_sigma.asDiagonal().inverse()* sigma.asDiagonal()*V.transpose()*p.m_F_p_tmp;
+
+    p.m_J_e=p.m_F_e.determinant();
+    p.m_J_p=p.m_F_p.determinant();
+}
+
 void updateParticle() {
     for (auto &p : particles) {
 
         //explicit advection
-        p.m_pos_p += p.m_vel_p * (float) dt;
+        p.m_pos_p += p.m_vel_p * dt;
+        updateDeformationGradient(p);
 
     }
 
@@ -524,21 +596,21 @@ void particleCollision() {
     for (auto &p : particles) {
 
         //explicit advection
-        if(p.m_pos_p.x<boundary){
-            p.m_pos_p.x=boundary;
-            p.m_vel_p.x=0;
+        if (p.m_pos_p.x < boundary) {
+            p.m_pos_p.x = boundary;
+            p.m_vel_p.x = 0;
         }
-        if(p.m_pos_p.x>1-boundary){
-            p.m_pos_p.x=1-boundary;
-            p.m_vel_p.x=0;
+        if (p.m_pos_p.x > 1 - boundary) {
+            p.m_pos_p.x = 1 - boundary;
+            p.m_vel_p.x = 0;
         }
-        if(p.m_pos_p.y<boundary){
-            p.m_pos_p.y=boundary;
-            p.m_vel_p.y=0;
+        if (p.m_pos_p.y < boundary) {
+            p.m_pos_p.y = boundary;
+            p.m_vel_p.y = 0;
         }
-        if(p.m_pos_p.y>1-boundary){
-            p.m_pos_p.y=1-boundary;
-            p.m_vel_p.y=0;
+        if (p.m_pos_p.y > 1 - boundary) {
+            p.m_pos_p.y = 1 - boundary;
+            p.m_vel_p.y = 0;
         }
 
     }
