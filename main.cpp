@@ -291,19 +291,19 @@ void simulationInit() {
     particle_num = 512;
     radius = 0.08;
     gravity = Vec2{0, -9.8};
-    V0 = 0.01; //TODO
+    V0 = 0.1; //TODO
     particles.resize(particle_num);
     particle_mass = 1.0;
     dx = 1. / grid_size;
     inv_dx = 1. / dx;
     center = Vec2 (0.5,0.7);
-    boundary = 0.03;
+    boundary = 0.01;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> dis(0, 9999);
 
     hardening=10;
-    E=1.4e4;
+    E=1.4e5;
     nu=0.2;
     mu0= E / (2 * (1 + nu));
     lambda0 = E * nu / ((1+nu) * (1 - 2 * nu));
@@ -445,6 +445,7 @@ void updateDeformationGradient(Particle &p) {
 void initGrid() {
     for (int i = 0; i < grid_size; i++) {
         for (int j = 0; j < grid_size; j++) {
+
             grid[i][j].m_vel_i.setZero();
             grid[i][j].m_mass_i = 0;
             grid[i][j].m_force_i .setZero();
