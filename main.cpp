@@ -303,7 +303,7 @@ void simulationInit() {
     std::uniform_int_distribution<int> dis(0, 9999);
 
     hardening=10;
-    E=1.4e5;
+    E=1.4e4;
     nu=0.2;
     mu0= E / (2 * (1 + nu));
     lambda0 = E * nu / ((1+nu) * (1 - 2 * nu));
@@ -413,7 +413,8 @@ void computeAp(Particle &p) {
     Mat2 U=svd.matrixU();
     Mat2 V=svd.matrixV();
     Mat2 Re = U*V.transpose();
-    p.m_Ap = V0*(2*mu*(p.m_F_e-Re)*p.m_F_e.transpose() + I*lambda*(p.m_J_e-1)*p.m_J_e);
+    p.m_Ap = V0*(2*mu*(p.m_F_e-Re)*p.m_F_e.transpose() + lambda*(p.m_J_e-1)*p.m_J_e*I);
+    //std::cout << p.m_Ap<<"\n\n\n";
 }
 Vec2 clamp(Vec2 & vec, Scalar minimum, Scalar maximum) {
 
@@ -479,6 +480,7 @@ void p2g() {
                 Vec2 coord;
                 coord << coord_x, coord_y;
                 Vec2 dist = (p.m_pos_p - coord * dx) * inv_dx;
+                std::cout << dist << "\n\n";
                 Scalar Weight = W(dist);
                 Vec2 dWeight = grad_W(dist);
                 grid[coord_x][coord_y].m_vel_i += p.m_vel_p * (p.m_mass_p * Weight);
