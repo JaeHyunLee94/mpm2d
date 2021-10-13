@@ -480,12 +480,17 @@ void p2g() {
                 Vec2 coord;
                 coord << coord_x, coord_y;
                 Vec2 dist = (p.m_pos_p - coord * dx) * inv_dx;
-                std::cout << dist << "\n\n";
+                //std::cout << dist << "\n\n";
                 Scalar Weight = W(dist);
                 Vec2 dWeight = grad_W(dist);
-                grid[coord_x][coord_y].m_vel_i += p.m_vel_p * (p.m_mass_p * Weight);
                 grid[coord_x][coord_y].m_mass_i += p.m_mass_p * Weight;
 
+
+                //original mpm
+                //grid[coord_x][coord_y].m_vel_i += p.m_vel_p * (p.m_mass_p * Weight);
+
+                //APIC
+                grid[coord_x][coord_y].m_vel_i +=p.m_mass_p * Weight* (p.m_vel_p +inv_dx*inv_dx*p.m_vel_grad*(-dist));
 
                 grid[coord_x][coord_y].m_force_i-= p.m_Ap*dWeight;
 
@@ -502,11 +507,21 @@ void updateGridVel() {
 
     for (int i = 0; i < grid_size; i++) {
         for (int j = 0; j < grid_size; j++) {
-
+            Scalar x = i * dx;
+            Scalar y = j * dx;
             //normalize
             if (grid[i][j].m_mass_i > 0) {
                 grid[i][j].m_vel_i /= grid[i][j].m_mass_i;
                 grid[i][j].m_vel_i += ( grid[i][j].m_force_i/grid[i][j].m_mass_i+ gravity) * dt;
+            }
+
+
+
+            if (x < boundary || x > 1 - boundary) {
+                grid[i][j].m_vel_i(0) = 0;
+            }
+            if (y < boundary || y > 1 - boundary) {
+                grid[i][j].m_vel_i(1) = 0;
             }
 
 
@@ -564,12 +579,14 @@ void g2p() {
 
                 Vec2 vel_PIC = grid[coord_x][coord_y].m_vel_i * Weight;
 
-                //TODO
-                Mat2 vel_grad = grid[coord_x][coord_y].m_vel_i*dWeight.transpose();
+
+
 
                 p.m_vel_p += vel_PIC;
-                p.m_vel_grad+=vel_grad;
-
+                //TODO
+                //Mat2 vel_grad = grid[coord_x][coord_y].m_vel_i*dWeight.transpose();
+                //p.m_vel_grad+=vel_grad;
+                p.m_vel_grad+=Weight*(grid[coord_x][coord_y].m_vel_i*(-dist).transpose());
             }
         }
 
@@ -583,8 +600,31 @@ void g2p() {
 void updateParticle() {
     for (auto &p : particles) {
 
+        auto xp_buff= p.m_pos_p;
+        p.m_pos_p.setZero();
         //explicit advection
-        p.m_pos_p += p.m_vel_p * dt;
+        //p.m_pos_p += p.m_vel_p * dt;
+        Mat2 T;
+        int base_x = static_cast<int> (std::floor(p.m_pos_p(0) * inv_dx));
+        int base_y = static_cast<int> (std::floor(p.m_pos_p(1) * inv_dx));
+
+        for (int i = -1; i < 3; i++) {
+            for (int j = -1; j < 3; j++) {
+
+                int coord_x = base_x + i;
+                int coord_y = base_y + j;
+
+                if (coord_x < 0 || coord_y < 0 || coord_x >= grid_size || coord_y >= grid_size) continue;
+                Vec2 coord;
+                coord << coord_x ,coord_y;
+                Vec2 dist = (p.m_pos_p - coord * dx) * inv_dx;
+                Scalar Weight = W(dist);
+                Vec2 dWeight = grad_W(dist);
+
+                p.m_pos_p+=Weight*(coord*dx +dt*grid[coord_x][coord_y].m_vel_i);
+
+            }
+        }
         updateDeformationGradient(p);
 
     }
@@ -622,7 +662,7 @@ void step() {
     initGrid();
     p2g();
     updateGridVel();
-    gridCollision();
+    //gridCollision();
     g2p();
     updateParticle();
     particleCollision();
