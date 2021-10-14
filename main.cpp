@@ -282,10 +282,10 @@ void render() {
 
 void simulationInit() {
 
-    dt = 0.0001;
+    dt = 0.0003;
     grid_size = 80;
-    particle_num = 1000;
-    radius = 0.08;
+    particle_num = 512;
+    radius = 0.03;
     gravity = Vec2{0, -200};
     V0 = 1.; //TODO
     particles.resize(particle_num);
@@ -390,48 +390,12 @@ Vec2 grad_W(Vec2 dist) {
 }
 
 
-//void computeAp(Particle &p) {
-//
-//    //TODO: transpose?
-//    Scalar mu=mu0*std::exp(hardening*(1-p.m_J_p));
-//    Scalar lambda=lambda0*std::exp(hardening*(1-p.m_J_p));
-//    Mat2 I;
-//    I.setIdentity();
-//    Eigen::JacobiSVD<Mat2> svd(p.m_F_e,Eigen::ComputeFullU | Eigen::ComputeFullV);
-//    Mat2 U=svd.matrixU();
-//    Mat2 V=svd.matrixV();
-//    Mat2 Re = U*V.transpose();
-//    p.m_Ap = V0*(2*mu*(p.m_F_e-Re)*p.m_F_e.transpose() + lambda*(p.m_J_e-1)*p.m_J_e*I);
-//    //std::cout << p.m_Ap<<"\n\n\n";
-//}
 Vec2 clamp(Vec2 &vec, Scalar minimum, Scalar maximum) {
 
     Vec2 ret;
     ret << std::clamp(vec(0), minimum, maximum), std::clamp(vec(1), minimum, maximum);
     return ret;
 }
-
-//void updateDeformationGradient(Particle &p) {
-//
-//    p.m_F_e_tmp= p.m_F_e+dt*p.m_vel_grad*p.m_F_e;
-//    //p.m_F_e_tmp= p.m_F_e+dt*T*p.m_F_e;
-//    p.m_F_p_tmp=p.m_F_p;
-//
-//
-//    Eigen::JacobiSVD<Mat2> svd(p.m_F_e_tmp,Eigen::ComputeFullU | Eigen::ComputeFullV);
-//    Mat2 U = svd.matrixU();
-//    Mat2 V = svd.matrixV();
-//    Eigen::Vector2d sigma = svd.singularValues();
-//
-//    Eigen::Vector2d clamped_sigma=clamp(sigma,1-critical_comp,1+critical_stretch);
-//
-//
-//    p.m_F_e=U*clamped_sigma.asDiagonal()*(V.transpose());
-//    p.m_F_p=V* (clamped_sigma.asDiagonal().inverse())* sigma.asDiagonal()*(V.transpose())*p.m_F_p_tmp;
-//
-//    p.m_J_e=p.m_F_e.determinant();
-//    p.m_J_p=p.m_F_p.determinant();
-//}
 void initGrid() {
     for (int i = 0; i < grid_size; i++) {
         for (int j = 0; j < grid_size; j++) {
