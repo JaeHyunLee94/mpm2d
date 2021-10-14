@@ -32,3 +32,4 @@ add_executable(mpm2d main.cpp ${glew_src})
 
 target_link_libraries(mpm2d ${OPENGL_LIBRARIES})
 target_link_libraries(mpm2d glfw ${GLFW_LIBRARIES})
+

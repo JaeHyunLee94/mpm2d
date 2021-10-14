@@ -1,7 +1,7 @@
 //
 // Created by 이재현 on 2021/09/19.
 //
-
+#include <iomanip>
 #include <iostream>
 #include <algorithm>
 #include <GL/glew.h>
@@ -13,6 +13,9 @@
 #include <vector>
 #include <fstream>
 #include <random>
+
+
+#define RECORD_VIDEO true
 
 typedef Eigen::Vector2d Vec2;
 typedef Eigen::Vector3d Vec3;
@@ -41,6 +44,18 @@ GLuint VAO;
 GLuint VBO;
 GLuint VBO_line;
 GLuint shader_program_id;
+int frame = 0;
+
+#if RECORD_VIDEO
+const static int FPS = 60;
+std::string str_cmd = "ffmpeg -r " + std::to_string(FPS) + " -f rawvideo -pix_fmt rgba -s "
+                      + std::to_string(1024) + "x" + std::to_string(1024)
+                      + " -i - -threads 0 -preset fast -y -pix_fmt yuv420p -crf 21 -vf vflip out/movie.mp4";
+const char *cmd = str_cmd.c_str();
+FILE *ffmpeg = _popen(cmd, "wb");
+int *buffer = new int[1024 * 1024];
+#endif
+
 const double line[]{
         0.0, 0.0,
         1.0, 0.0,
@@ -59,10 +74,11 @@ Scalar particle_mass;
 Scalar dx;
 Scalar inv_dx;
 Scalar boundary;
-Vec2 center;
-Scalar E,nu,mu0, lambda0, hardening, critical_comp, critical_stretch, rho_0;
+Vec2 center1, center2;
+Scalar E, nu, mu0, lambda0, hardening, critical_comp, critical_stretch, rho_0;
 
 unsigned int particle_num;
+unsigned int particle_num_per_lump;
 std::vector<Particle> particles;
 std::vector<std::vector<GridNode>> grid;
 
@@ -285,40 +301,58 @@ void render() {
 
 void simulationInit() {
 
-    dt = 0.0003;
-    grid_size = 80;
-    particle_num = 1600;
-    radius = 0.06;
-    gravity = Vec2{0, -200};
-    V0 = 0.1; //TODO
+    dt = 0.00005;
+    grid_size = 256;
+    particle_num_per_lump = 2048;
+    particle_num = 2 * particle_num_per_lump;
+    radius = 0.05;
+    gravity = Vec2{0, -9.89};
+    V0 = 1; //TODO
     particles.resize(particle_num);
     particle_mass = 1.0;
     dx = 1. / grid_size;
     inv_dx = 1. / dx;
-    center = Vec2 (0.5,0.5);
-    boundary = 0.02;
+    center1 = Vec2(0.2, 0.5);
+    center2 = Vec2(0.7, 0.6);
+    boundary = 0.01;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> dis(0, 9999);
 
-    hardening=10;
-    E=1.4e4;
-    nu=0.2;
-    mu0= E / (2 * (1 + nu));
-    lambda0 = E * nu / ((1+nu) * (1 - 2 * nu));
-    printf("mu0: %f, lamda0: %f\n",mu0,lambda0);
+    hardening = 10;
+    E = 1.4e7;
+    nu = 0.2;
+    mu0 = E / (2 * (1 + nu));
+    lambda0 = E * nu / ((1 + nu) * (1 - 2 * nu));
+    printf("mu0: %f, lamda0: %f\n", mu0, lambda0);
 
-    critical_comp= 2.5e-2;
-    critical_stretch= 7.5e-3;
+    critical_comp = 1.5e-2;
+    critical_stretch =3.5e-3;
     //particle init
-    for (int i = 0; i < particle_num; i++) {
+    for (int i = 0; i < particle_num_per_lump; i++) {
         int random_num = dis(gen);
         Scalar r = (radius / 10000.0) * (Scalar) dis(gen);
         Scalar theta = (360.0 / 10000.0) * (Scalar) dis(gen);
-        particles[i].m_pos_p(0)=center(0) +r* cos(theta);
-        particles[i].m_pos_p(1)=center(1) +r* sin(theta);
+        particles[i].m_pos_p(0) = center1(0) + r * cos(theta);
+        particles[i].m_pos_p(1) = center1(1) + r * sin(theta);
         particles[i].m_vel_p.setZero();
-        particles[i].m_vel_p(0)=3;
+        particles[i].m_vel_p(0) =6;
+        particles[i].m_vel_grad.setZero();
+
+        particles[i].m_F.setIdentity();
+        particles[i].m_J_p = 1;
+        particles[i].m_mass_p = particle_mass;
+        particles[i].m_Ap.setZero();
+
+    }
+    for (int i = particle_num_per_lump; i < particle_num; i++) {
+        int random_num = dis(gen);
+        Scalar r = (1.5 * radius / 10000.0) * (Scalar) dis(gen);
+        Scalar theta = (360.0 / 10000.0) * (Scalar) dis(gen);
+        particles[i].m_pos_p(0) = center2(0) + r * cos(theta);
+        particles[i].m_pos_p(1) = center2(1) + r * sin(theta);
+        particles[i].m_vel_p.setZero();
+        particles[i].m_vel_p(0) = -6;
         particles[i].m_vel_grad.setZero();
 
         particles[i].m_F.setIdentity();
@@ -334,8 +368,8 @@ void simulationInit() {
         g.resize(grid_size);
         for (int i = 0; i < grid_size; i++) {
             //vel + mass
-            g[i].m_vel_i .setZero();
-            g[i].m_force_i .setZero();
+            g[i].m_vel_i.setZero();
+            g[i].m_force_i.setZero();
             g[i].m_mass_i = 0;
         }
     }
@@ -398,54 +432,54 @@ Vec2 grad_W(Vec2 dist) {
 }
 
 
-
 void computeAp(Particle &p) {
 
-    //TODO: transpose?
-    Scalar mu=mu0*std::exp(hardening*(1-p.m_J_p));
-    Scalar lambda=lambda0*std::exp(hardening*(1-p.m_J_p));
+    Scalar mu = mu0 * std::exp(hardening * (1 - p.m_J_p));
+    Scalar lambda = lambda0 * std::exp(hardening * (1 - p.m_J_p));
     Mat2 I;
     I.setIdentity();
-    Eigen::JacobiSVD<Mat2> svd(p.m_F,Eigen::ComputeFullU | Eigen::ComputeFullV);
-    Mat2 U=svd.matrixU();
-    Mat2 V=svd.matrixV();
-    Mat2 Re = U*V.transpose();
-    Scalar J_e=p.m_F.determinant();
-    p.m_Ap = V0*(2*mu*(p.m_F-Re)*p.m_F.transpose() + lambda*(J_e-1)*J_e*I);
+    Eigen::JacobiSVD<Mat2> svd(p.m_F, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Mat2 U = svd.matrixU();
+    Mat2 V = svd.matrixV();
+    Mat2 Re = U * V.transpose();
+    Scalar J_e = p.m_F.determinant();
+    p.m_Ap = V0 * (2 * mu * (p.m_F - Re) * p.m_F.transpose() + lambda * (J_e - 1) * J_e * I);
+
 
 }
-Vec2 clamp(Vec2 & vec, Scalar minimum, Scalar maximum) {
+
+Vec2 clamp(Vec2 &vec, Scalar minimum, Scalar maximum) {
 
     Vec2 ret;
-    ret << std::clamp(vec(0),minimum,maximum),std::clamp(vec(1),minimum,maximum);
-
+    ret << std::clamp(vec(0), minimum, maximum), std::clamp(vec(1), minimum, maximum);
     return ret;
 }
 
 void updateDeformationGradient(Particle &p) {
 
-    p.m_F= p.m_F+dt*p.m_vel_grad*p.m_F;
+    p.m_F = p.m_F + dt * p.m_vel_grad * p.m_F;
 
 
     Scalar oldJ = p.m_F.determinant();
-    Eigen::JacobiSVD<Mat2> svd(p.m_F,Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Eigen::JacobiSVD<Mat2> svd(p.m_F, Eigen::ComputeFullU | Eigen::ComputeFullV);
     Mat2 U = svd.matrixU();
     Mat2 V = svd.matrixV();
     Eigen::Vector2d sigma = svd.singularValues();
-    Eigen::Vector2d clamped_sigma=clamp(sigma,1-critical_comp,1+critical_stretch);
+    Eigen::Vector2d clamped_sigma = clamp(sigma, 1 - critical_comp, 1 + critical_stretch);
 
 
-   p.m_F=U*clamped_sigma.asDiagonal()*V.transpose();
-   Scalar newJP =std::clamp(p.m_J_p*oldJ/p.m_F.determinant(), 0.6, 4000.0);
-   p.m_J_p = newJP;
+    p.m_F = U * clamped_sigma.asDiagonal() * V.transpose();
+    Scalar newJP = std::clamp(p.m_J_p * oldJ / p.m_F.determinant(), 0.6, 20.0);
+    p.m_J_p = newJP;
 }
+
 void initGrid() {
     for (int i = 0; i < grid_size; i++) {
         for (int j = 0; j < grid_size; j++) {
 
             grid[i][j].m_vel_i.setZero();
             grid[i][j].m_mass_i = 0;
-            grid[i][j].m_force_i .setZero();
+            grid[i][j].m_force_i.setZero();
 
         }
     }
@@ -485,7 +519,7 @@ void p2g() {
                 //original mpm
                 grid[coord_x][coord_y].m_vel_i += p.m_vel_p * (p.m_mass_p * Weight);
 
-                grid[coord_x][coord_y].m_force_i-= p.m_Ap*dWeight;
+                grid[coord_x][coord_y].m_force_i -= p.m_Ap * dWeight;
 
 
             }
@@ -506,11 +540,8 @@ void updateGridVel() {
                 grid[i][j].m_vel_i /= grid[i][j].m_mass_i;
 
 
-                grid[i][j].m_vel_i += ( grid[i][j].m_force_i/grid[i][j].m_mass_i+ gravity) * dt;
+                grid[i][j].m_vel_i += ( grid[i][j].m_force_i / grid[i][j].m_mass_i+gravity) * dt;
             }
-
-
-
 
 
         }
@@ -560,7 +591,7 @@ void g2p() {
 
                 if (coord_x < 0 || coord_y < 0 || coord_x >= grid_size || coord_y >= grid_size) continue;
                 Vec2 coord;
-                coord << coord_x ,coord_y;
+                coord << coord_x, coord_y;
                 Vec2 dist = (p.m_pos_p - coord * dx) * inv_dx;
                 Scalar Weight = W(dist);
                 Vec2 dWeight = grad_W(dist);
@@ -568,12 +599,9 @@ void g2p() {
                 Vec2 vel_PIC = grid[coord_x][coord_y].m_vel_i * Weight;
 
 
-
-
                 p.m_vel_p += vel_PIC;
-                //TODO
-                Mat2 vel_grad = grid[coord_x][coord_y].m_vel_i*dWeight.transpose();
-                p.m_vel_grad+=vel_grad;
+                Mat2 vel_grad = grid[coord_x][coord_y].m_vel_i * dWeight.transpose();
+                p.m_vel_grad += vel_grad;
                 //p.m_vel_grad+=Weight*(grid[coord_x][coord_y].m_vel_i*(-dist.transpose()));
             }
         }
@@ -602,19 +630,19 @@ void particleCollision() {
 
         //explicit advection
         if (p.m_pos_p(0) < boundary) {
-            p.m_pos_p(0) = boundary;
+            //p.m_pos_p(0) = boundary;
             p.m_vel_p(0) = 0;
         }
         if (p.m_pos_p(0) > 1 - boundary) {
-            p.m_pos_p(0) = 1 - boundary;
-            p.m_vel_p(0)= 0;
+            //p.m_pos_p(0) = 1 - boundary;
+            p.m_vel_p(0) = 0;
         }
         if (p.m_pos_p(1) < boundary) {
-            p.m_pos_p(1) = boundary;
+            //p.m_pos_p(1) = boundary;
             p.m_vel_p(1) = 0;
         }
         if (p.m_pos_p(1) > 1 - boundary) {
-            p.m_pos_p(1) = 1 - boundary;
+            //p.m_pos_p(1) = 1 - boundary;
             p.m_vel_p(1) = 0;
         }
 
@@ -633,7 +661,6 @@ void step() {
     updateParticle();
 
 
-
 }
 
 
@@ -645,7 +672,7 @@ int main() {
     simulationInit();
     glObjectInit();
 
-    int frame = 0;
+
     do {
 
         glClear(GL_COLOR_BUFFER_BIT);
@@ -658,11 +685,19 @@ int main() {
         frame++;
         glfwSwapBuffers(window);
 
+#if RECORD_VIDEO
+        glReadPixels(0, 0, 1024, 2014, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+        fwrite(buffer, sizeof(int) * 1024 * 1024, 1, ffmpeg);
+#endif
+
+
 
     } // Check if the ESC key was pressed or the window was closed
     while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
-           glfwWindowShouldClose(window) == 0);
-
+           glfwWindowShouldClose(window) == 0 && frame <3000);
+#if RECORD_VIDEO
+    _pclose(ffmpeg);
+#endif
 
     return 0;
 }
