@@ -28,7 +28,6 @@ struct Particle {
     Vec2 m_pos_p;
     Vec2 m_vel_p;
     Mat2 m_vel_grad;
-    Vec3 m_force_P;
     Scalar m_mass_p;
     Mat2 m_F; //tmp for computation
     Mat2 m_Ap;//for computation Vpop;
@@ -288,8 +287,8 @@ void simulationInit() {
 
     dt = 0.0003;
     grid_size = 80;
-    particle_num = 3000;
-    radius = 0.08;
+    particle_num = 1600;
+    radius = 0.06;
     gravity = Vec2{0, -200};
     V0 = 0.1; //TODO
     particles.resize(particle_num);
@@ -325,7 +324,7 @@ void simulationInit() {
         particles[i].m_F.setIdentity();
         particles[i].m_J_p = 1;
         particles[i].m_mass_p = particle_mass;
-        particles[i].m_Ap.setIdentity();
+        particles[i].m_Ap.setZero();
 
     }
 
@@ -413,12 +412,13 @@ void computeAp(Particle &p) {
     Mat2 Re = U*V.transpose();
     Scalar J_e=p.m_F.determinant();
     p.m_Ap = V0*(2*mu*(p.m_F-Re)*p.m_F.transpose() + lambda*(J_e-1)*J_e*I);
-    //std::cout << p.m_Ap<<"\n\n\n";
+
 }
 Vec2 clamp(Vec2 & vec, Scalar minimum, Scalar maximum) {
 
     Vec2 ret;
     ret << std::clamp(vec(0),minimum,maximum),std::clamp(vec(1),minimum,maximum);
+
     return ret;
 }
 
@@ -582,8 +582,6 @@ void g2p() {
     }
 
 };
-
-
 
 void updateParticle() {
     for (auto &p : particles) {
