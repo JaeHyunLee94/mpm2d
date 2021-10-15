@@ -24,13 +24,13 @@ make
 
 Simulation result for Various parameter.
 
-![1](https://github.com/LEE-JAE-HYUN179/mpm2d/tree/master/out/1.gif)
-![2](https://github.com/LEE-JAE-HYUN179/mpm2d/tree/master/out/2.gif)
-![3](https://github.com/LEE-JAE-HYUN179/mpm2d/tree/master/out/3.gif)
-![4](hhttps://github.com/LEE-JAE-HYUN179/mpm2d/tree/master/out/4.gif)
-![5](https://github.com/LEE-JAE-HYUN179/mpm2d/tree/master/out/5.gif)
-![6](https://github.com/LEE-JAE-HYUN179/mpm2d/tree/master/out/6.gif)
-![7](https://github.com/LEE-JAE-HYUN179/mpm2d/tree/master/out/7.gif)
+![1](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/1.gif)
+![2](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/2.gif)
+![3](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/3.gif)
+![4](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/4.gif)
+![5](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/5.gif)
+![6](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/6.gif)
+![7](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/7.gif)
 
 
 ### Dependencies
