@@ -28,7 +28,7 @@ message("include Eigen...")
 include_directories(${PROJECT_SOURCE_DIR}/external/eigen-3.3.9/)
 
 
-add_executable(mpm2d main.cpp ${glew_src})
+add_executable(mpm2d main.cpp glHeader.h ${glew_src} simHeader.h)
 
 target_link_libraries(mpm2d ${OPENGL_LIBRARIES})
 target_link_libraries(mpm2d glfw ${GLFW_LIBRARIES})
