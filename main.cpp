@@ -336,7 +336,7 @@ void simulationInit() {
         particles[i].m_pos_p(0) = center1(0) + r * cos(theta);
         particles[i].m_pos_p(1) = center1(1) + r * sin(theta);
         particles[i].m_vel_p.setZero();
-        particles[i].m_vel_p(0) =6;
+        particles[i].m_vel_p(0) =10;
         particles[i].m_vel_grad.setZero();
 
         particles[i].m_F.setIdentity();
@@ -352,7 +352,7 @@ void simulationInit() {
         particles[i].m_pos_p(0) = center2(0) + r * cos(theta);
         particles[i].m_pos_p(1) = center2(1) + r * sin(theta);
         particles[i].m_vel_p.setZero();
-        particles[i].m_vel_p(0) = -6;
+        particles[i].m_vel_p(0) = -10;
         particles[i].m_vel_grad.setZero();
 
         particles[i].m_F.setIdentity();
