@@ -22,16 +22,25 @@ make
 
 ### Result
 
-Simulation result for Various parameter.
+Simulation result for various parameter.
 
-![1](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/1.gif)
-![2](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/2.gif)
-![3](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/3.gif)
-![4](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/4.gif)
-![5](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/5.gif)
-![6](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/6.gif)
-![7](https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/7.gif)
+[comment]: <> (![1]&#40;https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/1.gif&#41;)
 
+[comment]: <> (![2]&#40;https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/2.gif&#41;)
+
+[comment]: <> (![3]&#40;https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/3.gif&#41;)
+
+[comment]: <> (![4]&#40;https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/4.gif&#41;)
+
+[comment]: <> (![5]&#40;https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/5.gif&#41;)
+
+[comment]: <> (![6]&#40;https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/6.gif&#41;)
+
+[comment]: <> (![7]&#40;https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/7.gif&#41;)
+<img src="https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/1.gif" style=""> <img src="https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/2.gif">
+<img src="https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/3.gif"> <img src="hhttps://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/4.gif">
+<img src="hhttps://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/5.gif"> <img src="https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/6.gif">
+<img src="https://github.com/LEE-JAE-HYUN179/mpm2d/blob/master/out/7.gif"> 
 
 ### Dependencies
  - [GLFW](https://github.com/glfw/glfw)
